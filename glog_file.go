@@ -33,6 +33,12 @@ import (
 // MaxSize is the maximum size of a log file in bytes.
 var MaxSize uint64 = 1024 * 1024 * 1800
 
+// DailyRolling to rotate log files daily.
+var DailyRolling bool
+
+// Backups to keep around resulting from log file rotation.
+var Backups int = 7
+
 // logDirs lists the candidate directories for new log files.
 var logDirs []string
 
@@ -102,7 +108,7 @@ var onceLogDirs sync.Once
 // contains tag ("INFO", "FATAL", etc.) and t.  If the file is created
 // successfully, create also attempts to update the symlink for that tag, ignoring
 // errors.
-func create(tag string, t time.Time) (f *os.File, filename string, err error) {
+func create(tag string, t time.Time, longName bool) (f *os.File, filename string, err error) {
 	onceLogDirs.Do(createLogDirs)
 	if len(logDirs) == 0 {
 		return nil, "", errors.New("log: no log dirs")
@@ -111,11 +117,33 @@ func create(tag string, t time.Time) (f *os.File, filename string, err error) {
 	var lastErr error
 	for _, dir := range logDirs {
 		fname := filepath.Join(dir, name)
-		f, err := os.Create(fname)
+		if DailyRolling {
+			switch tag {
+			case "INFO":
+				if longName {
+					fname = filepath.Join(dir, program+t.Format(".log.20060102T150405"))
+				} else {
+					fname = filepath.Join(dir, program+t.Format(".log.20060102"))
+				}
+			default:
+				fname = os.DevNull
+			}
+			f, err = os.OpenFile(fname, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		} else {
+			f, err = os.Create(fname)
+		}
 		if err == nil {
-			symlink := filepath.Join(dir, link)
-			os.Remove(symlink)        // ignore err
-			os.Symlink(name, symlink) // ignore err
+			if DailyRolling {
+				if fname != os.DevNull {
+					symlink := filepath.Join(dir, program+".log")
+					os.Remove(symlink)
+					os.Symlink(filepath.Base(fname), symlink)
+				}
+			} else {
+				symlink := filepath.Join(dir, link)
+				os.Remove(symlink)        // ignore err
+				os.Symlink(name, symlink) // ignore err
+			}
 			return f, fname, nil
 		}
 		lastErr = err
