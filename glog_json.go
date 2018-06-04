@@ -222,6 +222,15 @@ func (s *Struct) Bytes(name string, b []byte) *Struct {
 	return s
 }
 
+// Raw adds the field name with value as a unescape string to the logger *Struct.
+func (s *Struct) Raw(name string, b []byte) *Struct {
+	if s != nil {
+		s.appendName(name)
+		s.buf = append(s.buf, b...)
+	}
+	return s
+}
+
 // Strs adds the field name with values as a []string to the logger *Struct.
 func (s *Struct) Strs(name string, values []string) *Struct {
 	if s != nil {
